@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マイクラ建築ルーレット</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; }
+
+  .layout { display: flex; min-height: 100vh; }
+
+  /* 左: キュー */
+  .queue-panel {
+    width: 280px; min-width: 280px; background: #12122a; border-right: 1px solid #333;
+    padding: 16px; overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .queue-panel h2 { font-size: 1rem; color: #f0a500; margin-bottom: 12px; }
+  .queue-empty { font-size: 0.85rem; color: #666; }
+  .queue-list { list-style: none; flex: 1; overflow-y: auto; }
+  .queue-list li {
+    padding: 8px 10px; margin-bottom: 6px; background: #1a1a3e; border-radius: 8px;
+    font-size: 0.85rem; display: flex; justify-content: space-between; align-items: flex-start;
+    animation: fadeIn 0.2s;
+  }
+  .queue-list li .q-info { flex: 1; }
+  .queue-list li .q-name { font-weight: bold; margin-bottom: 2px; }
+  .queue-list li .q-meta { font-size: 0.75rem; color: #888; }
+  .queue-list li .q-remove {
+    background: none; border: none; color: #e94560; cursor: pointer;
+    font-size: 0.9rem; padding: 0 4px; margin-left: 6px; flex-shrink: 0;
+  }
+  .queue-list li .q-remove:hover { color: #ff6b81; }
+  .queue-actions { margin-top: 10px; display: flex; gap: 6px; }
+  .queue-actions button {
+    flex: 1; font-size: 0.78rem; color: #888; background: none; border: 1px solid #444;
+    padding: 5px 8px; border-radius: 6px; cursor: pointer;
+  }
+  .queue-actions button:hover { border-color: #888; color: #ccc; }
+
+  /* 右: メイン */
+  .main-panel { flex: 1; padding: 24px 24px; overflow-y: auto; }
+  .main-panel h1 { text-align: center; font-size: 1.5rem; margin-bottom: 18px; }
+  .filters { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .filters select {
+    flex: 1; min-width: 120px; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid #444; background: #16213e; color: #e0e0e0; font-size: 0.95rem;
+  }
+  .filters select:focus { outline: none; border-color: #e94560; }
+  .hit-count { text-align: center; font-size: 0.85rem; color: #888; margin-bottom: 14px; }
+  .spin-btn {
+    display: block; width: 100%; padding: 14px; font-size: 1.1rem; border: none;
+    border-radius: 10px; background: #e94560; color: #fff; cursor: pointer;
+    font-weight: bold; transition: background 0.2s;
+  }
+  .spin-btn:hover { background: #c73e54; }
+  .spin-btn:active { transform: scale(0.98); }
+
+  .results { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+  .result {
+    background: #16213e; border-radius: 12px; padding: 18px; animation: fadeIn 0.3s;
+    position: relative;
+  }
+  .result h2 { font-size: 1.15rem; margin-bottom: 8px; padding-right: 80px; }
+  .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 0.85rem; color: #aaa; }
+  .meta span { background: #0f3460; padding: 3px 8px; border-radius: 6px; }
+  .desc { line-height: 1.7; margin-bottom: 8px; font-size: 0.93rem; }
+  .stars { font-size: 1rem; margin-bottom: 6px; }
+  .tags { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tags span { background: #533483; padding: 2px 8px; border-radius: 12px; font-size: 0.78rem; }
+
+  .card-actions {
+    position: absolute; top: 14px; right: 14px; display: flex; gap: 6px;
+  }
+  .queue-btn {
+    background: #f0a500; border: none; color: #1a1a2e; cursor: pointer;
+    font-size: 0.8rem; font-weight: bold; padding: 5px 12px; border-radius: 6px;
+    transition: background 0.2s;
+  }
+  .queue-btn:hover { background: #ffbd2e; }
+  .queue-btn.in-queue { background: #444; color: #aaa; }
+  .queue-btn.in-queue:hover { background: #555; }
+  .ban-btn {
+    background: none; border: 1px solid #e94560; color: #e94560; cursor: pointer;
+    font-size: 0.8rem; font-weight: bold; padding: 4px 10px; border-radius: 6px;
+    transition: all 0.2s;
+  }
+  .ban-btn:hover { background: #e94560; color: #fff; }
+
+  .count { text-align: right; font-size: 0.8rem; color: #666; margin-top: 6px; }
+  .empty { text-align: center; color: #888; margin-top: 20px; padding: 20px; }
+  .warning { text-align: center; color: #f0a500; margin-top: 20px; }
+
+  .history { margin-top: 24px; }
+  .history h3 { font-size: 0.9rem; color: #666; margin-bottom: 8px; border-top: 1px solid #333; padding-top: 14px; }
+  .history ul { list-style: none; }
+  .history li { font-size: 0.85rem; color: #888; padding: 2px 0; }
+  .history li::before { content: "- "; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* モバイル対応 */
+  @media (max-width: 700px) {
+    .layout { flex-direction: column; }
+    .queue-panel {
+      width: 100%; min-width: 0; max-height: 200px; border-right: none;
+      border-bottom: 1px solid #333; order: -1;
+    }
+    .main-panel { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- 左: キュー -->
+  <div class="queue-panel">
+    <h2>&#128203; 建築キュー (<span id="queueCount">0</span>)</h2>
+    <ul class="queue-list" id="queueList">
+      <li class="queue-empty" id="queueEmpty">カードの「+キュー」ボタンで追加しよう</li>
+    </ul>
+    <div class="queue-actions" id="queueActions" style="display:none">
+      <button onclick="exportQueue()">コピー</button>
+      <button onclick="clearQueue()">全削除</button>
+    </div>
+  </div>
+
+  <!-- 右: メイン -->
+  <div class="main-panel">
+    <h1>&#9935;&#65039; マイクラ建築ルーレット</h1>
+    <div style="text-align:right;margin-bottom:10px">
+      <a href="ban.html" style="color:#e94560;font-size:0.85rem;text-decoration:none">&#128683; BANリスト</a>
+    </div>
+    <div class="filters">
+      <select id="scale"><option value="">規模: なんでも</option></select>
+      <select id="mood"><option value="">ムード: なんでも</option></select>
+    </div>
+    <div class="hit-count" id="hitCount"></div>
+    <button class="spin-btn" id="spinBtn">&#127922; ランダムに3件提案</button>
+    <div id="result"></div>
+    <div class="history" id="historySection" style="display:none">
+      <h3>さっき出たやつ</h3>
+      <ul id="historyList"></ul>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+const rows = CSV.trim().split("\n").slice(1).map(line => {
+  const m = line.match(/^([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(.*),([^,]*)$/);
+  if (!m) return null;
+  return { name: m[1], category: m[2], scale: m[3], mood: m[4], difficulty: +m[5], description: m[6], tags: m[7] };
+}).filter(Boolean);
+
+const scales = [...new Set(rows.map(r => r.scale))].sort();
+const moods = [...new Set(rows.map(r => r.mood))].sort();
+scales.forEach(s => document.getElementById("scale").innerHTML += `<option value="${s}">${s}</option>`);
+moods.forEach(m => document.getElementById("mood").innerHTML += `<option value="${m}">${m}</option>`);
+
+let spinCount = 0;
+const history = [];
+let currentBuilds = [];
+
+// --- Queue (localStorage) ---
+function getQueue() {
+  try { return JSON.parse(localStorage.getItem("mcQueue") || "[]"); } catch { return []; }
+}
+function saveQueue(q) { localStorage.setItem("mcQueue", JSON.stringify(q)); }
+function isInQueue(name) { return getQueue().some(f => f.name === name); }
+
+function addToQueue(idx) {
+  const b = currentBuilds[idx];
+  if (!b || isInQueue(b.name)) return;
+  const q = getQueue();
+  q.push({ name: b.name, category: b.category, scale: b.scale, mood: b.mood, difficulty: b.difficulty });
+  saveQueue(q);
+  renderQueue();
+  updateQueueButtons();
+}
+
+function removeFromQueue(idx) {
+  const q = getQueue();
+  q.splice(idx, 1);
+  saveQueue(q);
+  renderQueue();
+  updateQueueButtons();
+}
+
+function clearQueue() {
+  saveQueue([]);
+  renderQueue();
+  updateQueueButtons();
+}
+
+function renderQueue() {
+  const q = getQueue();
+  document.getElementById("queueCount").textContent = q.length;
+  const list = document.getElementById("queueList");
+  const actions = document.getElementById("queueActions");
+  const empty = document.getElementById("queueEmpty");
+
+  if (q.length === 0) {
+    list.innerHTML = '<li class="queue-empty" id="queueEmpty">カードの「+キュー」ボタンで追加しよう</li>';
+    actions.style.display = "none";
+    return;
+  }
+
+  actions.style.display = "";
+  list.innerHTML = q.map((f, i) => {
+    const stars = "\u2605".repeat(f.difficulty) + "\u2606".repeat(5 - f.difficulty);
+    return `<li>
+      <div class="q-info">
+        <div class="q-name">${f.name}</div>
+        <div class="q-meta">${f.scale} / ${f.mood} / ${stars}</div>
+      </div>
+      <button class="q-remove" onclick="removeFromQueue(${i})">\u2715</button>
+    </li>`;
+  }).join("");
+}
+
+function updateQueueButtons() {
+  document.querySelectorAll(".queue-btn").forEach(btn => {
+    const idx = +btn.dataset.idx;
+    const b = currentBuilds[idx];
+    if (b && isInQueue(b.name)) {
+      btn.textContent = "追加済";
+      btn.classList.add("in-queue");
+    } else {
+      btn.textContent = "+ \u30AD\u30E5\u30FC";
+      btn.classList.remove("in-queue");
+    }
+  });
+}
+
+function exportQueue() {
+  const q = getQueue();
+  const text = q.map((f, i) => `${i + 1}. ${f.name} (${f.scale}/${f.mood})`).join("\n");
+  navigator.clipboard.writeText(text).then(() => {
+    const btns = document.querySelectorAll(".queue-actions button");
+    btns[0].textContent = "OK!";
+    setTimeout(() => { btns[0].textContent = "コピー"; }, 1200);
+  });
+}
+
+// --- Bans ---
+function getBans() {
+  try { return new Set(JSON.parse(localStorage.getItem("mcBans") || "[]").map(b => b.name)); } catch { return new Set(); }
+}
+
+// --- Filters ---
+function getFiltered() {
+  const s = document.getElementById("scale").value;
+  const m = document.getElementById("mood").value;
+  const bans = getBans();
+  return rows.filter(r => (!s || r.scale === s) && (!m || r.mood === m) && !bans.has(r.name));
+}
+function updateCount() {
+  document.getElementById("hitCount").textContent =
+    `${getFiltered().length}件 ヒット（全${rows.length}件）`;
+}
+document.getElementById("scale").addEventListener("change", updateCount);
+document.getElementById("mood").addEventListener("change", updateCount);
+updateCount();
+
+// --- Spin ---
+function pickN(arr, n) {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+function banFromCard(idx) {
+  const b = currentBuilds[idx];
+  if (!b) return;
+  const bans = JSON.parse(localStorage.getItem("mcBans") || "[]");
+  if (!bans.some(x => x.name === b.name)) {
+    bans.push({ name: b.name, category: b.category, scale: b.scale, mood: b.mood, difficulty: b.difficulty });
+    localStorage.setItem("mcBans", JSON.stringify(bans));
+  }
+  // カードをフェードアウト
+  const card = document.querySelectorAll(".result")[idx];
+  if (card) {
+    card.style.opacity = "0.3";
+    card.style.pointerEvents = "none";
+    const h2 = card.querySelector("h2");
+    if (h2) h2.style.textDecoration = "line-through";
+  }
+  updateCount();
+}
+
+function renderCard(b, idx) {
+  const stars = "\u2605".repeat(b.difficulty) + "\u2606".repeat(5 - b.difficulty);
+  const tagHtml = b.tags.split("|").filter(t => t.trim()).map(t => `<span>${t.trim()}</span>`).join("");
+  const inQ = isInQueue(b.name);
+  const btnLabel = inQ ? "追加済" : "+ キュー";
+  const btnClass = inQ ? "queue-btn in-queue" : "queue-btn";
+  return `
+    <div class="result">
+      <div class="card-actions">
+        <button class="${btnClass}" data-idx="${idx}" onclick="addToQueue(${idx})">${btnLabel}</button>
+        <button class="ban-btn" onclick="banFromCard(${idx})">BAN</button>
+      </div>
+      <h2>${b.name}</h2>
+      <div class="meta">
+        <span>${b.category}</span>
+        <span>${b.scale}</span>
+        <span>${b.mood}</span>
+      </div>
+      <div class="desc">${b.description}</div>
+      <div class="stars">難易度: ${stars}</div>
+      <div class="tags">${tagHtml}</div>
+    </div>`;
+}
+
+document.getElementById("spinBtn").addEventListener("click", function() {
+  let filtered = getFiltered();
+  if (filtered.length === 0) {
+    document.getElementById("result").innerHTML =
+      '<div class="warning">その条件の建築はまだ収録されていません。条件を変えてみてね。</div>';
+    return;
+  }
+
+  const picks = pickN(filtered, Math.min(3, filtered.length));
+  currentBuilds = picks;
+  spinCount++;
+
+  picks.forEach(b => {
+    if (history.length === 0 || history[0] !== b.name) history.unshift(b.name);
+  });
+  if (history.length > 12) history.length = 12;
+
+  document.getElementById("result").innerHTML =
+    '<div class="results">' +
+    picks.map((b, i) => renderCard(b, i)).join("") +
+    `<div class="count">${spinCount}回目</div>` +
+    '</div>';
+
+  const hs = document.getElementById("historySection");
+  hs.style.display = "";
+  document.getElementById("historyList").innerHTML = history.map(n => `<li>${n}</li>`).join("");
+});
+
+renderQueue();
+</script>
+</body>
+</html>
