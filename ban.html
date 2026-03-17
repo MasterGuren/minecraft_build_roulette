@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BANリスト - マイクラ建築ルーレット</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; }
+  .container { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 1.4rem; margin-bottom: 6px; }
+  .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 20px; }
+  .back { display: inline-block; color: #e94560; text-decoration: none; font-size: 0.9rem; margin-bottom: 16px; }
+  .back:hover { text-decoration: underline; }
+
+  .search-box {
+    display: flex; gap: 8px; margin-bottom: 20px;
+  }
+  .search-box input {
+    flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #444;
+    background: #16213e; color: #e0e0e0; font-size: 0.95rem;
+  }
+  .search-box input:focus { outline: none; border-color: #e94560; }
+  .search-box input::placeholder { color: #666; }
+
+  .section { margin-bottom: 28px; }
+  .section h2 { font-size: 1rem; color: #e94560; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+  .section h2 .count { color: #888; font-weight: normal; }
+
+  .ban-list { list-style: none; }
+  .ban-list li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; margin-bottom: 4px; background: #16213e; border-radius: 8px;
+    font-size: 0.88rem; animation: fadeIn 0.2s;
+  }
+  .ban-list .b-info { flex: 1; }
+  .ban-list .b-name { font-weight: bold; }
+  .ban-list .b-meta { font-size: 0.75rem; color: #888; margin-top: 2px; }
+  .ban-list .b-action { flex-shrink: 0; margin-left: 8px; }
+  .ban-list .b-action button {
+    border: none; padding: 4px 12px; border-radius: 6px; font-size: 0.8rem;
+    cursor: pointer; font-weight: bold; transition: background 0.2s;
+  }
+
+  .btn-ban { background: #e94560; color: #fff; }
+  .btn-ban:hover { background: #c73e54; }
+  .btn-unban { background: #444; color: #ccc; }
+  .btn-unban:hover { background: #555; }
+
+  .empty-msg { color: #666; font-size: 0.85rem; padding: 12px 0; }
+
+  .actions { display: flex; gap: 8px; margin-bottom: 20px; }
+  .actions button {
+    font-size: 0.82rem; color: #888; background: none; border: 1px solid #444;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  }
+  .actions button:hover { border-color: #888; color: #ccc; }
+  .actions button.danger { border-color: #e94560; color: #e94560; }
+  .actions button.danger:hover { background: #e94560; color: #fff; }
+
+  .search-results { max-height: 400px; overflow-y: auto; }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <a class="back" href="index.html">&larr; ルーレットに戻る</a>
+  <h1>&#128683; BANリスト</h1>
+  <p class="subtitle">BANした建築はルーレットに出なくなります</p>
+
+  <!-- BAN済み一覧 -->
+  <div class="section">
+    <h2>BAN済み <span class="count" id="banCount">(0件)</span></h2>
+    <div class="actions" id="banActions" style="display:none">
+      <button onclick="exportBans()">リストをコピー</button>
+      <button class="danger" onclick="clearBans()">全解除</button>
+    </div>
+    <ul class="ban-list" id="banList"></ul>
+  </div>
+
+</div>
+
+<script src="data.js"></script>
+<script>
+const rows = CSV.trim().split("\n").slice(1).map(line => {
+  const m = line.match(/^([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(.*),([^,]*)$/);
+  if (!m) return null;
+  return { name: m[1], category: m[2], scale: m[3], mood: m[4], difficulty: +m[5], description: m[6], tags: m[7] };
+}).filter(Boolean);
+
+function getBans() {
+  try { return JSON.parse(localStorage.getItem("mcBans") || "[]"); } catch { return []; }
+}
+function saveBans(b) { localStorage.setItem("mcBans", JSON.stringify(b)); }
+function isBanned(name) { return getBans().some(b => b.name === name); }
+
+function addBan(name) {
+  const row = rows.find(r => r.name === name);
+  if (!row || isBanned(name)) return;
+  const bans = getBans();
+  bans.push({ name: row.name, category: row.category, scale: row.scale, mood: row.mood, difficulty: row.difficulty });
+  saveBans(bans);
+  renderBans();
+  doSearch();
+}
+
+function removeBan(idx) {
+  const bans = getBans();
+  bans.splice(idx, 1);
+  saveBans(bans);
+  renderBans();
+  doSearch();
+}
+
+function clearBans() {
+  if (!confirm("BANリストを全て解除しますか？")) return;
+  saveBans([]);
+  renderBans();
+  doSearch();
+}
+
+function renderBans() {
+  const bans = getBans();
+  document.getElementById("banCount").textContent = `(${bans.length}件)`;
+  const list = document.getElementById("banList");
+  const actions = document.getElementById("banActions");
+
+  if (bans.length === 0) {
+    list.innerHTML = '<li class="empty-msg">BANリストは空です</li>';
+    actions.style.display = "none";
+    return;
+  }
+
+  actions.style.display = "";
+  list.innerHTML = bans.map((b, i) => {
+    const stars = "\u2605".repeat(b.difficulty) + "\u2606".repeat(5 - b.difficulty);
+    return `<li>
+      <div class="b-info">
+        <div class="b-name">${b.name}</div>
+        <div class="b-meta">${b.scale} / ${b.mood} / ${b.category} / ${stars}</div>
+      </div>
+      <div class="b-action">
+        <button class="btn-unban" onclick="removeBan(${i})">解除</button>
+      </div>
+    </li>`;
+  }).join("");
+}
+
+function exportBans() {
+  const bans = getBans();
+  const text = bans.map(b => `${b.name} (${b.scale}/${b.mood})`).join("\n");
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector(".actions button");
+    btn.textContent = "OK!";
+    setTimeout(() => { btn.textContent = "リストをコピー"; }, 1200);
+  });
+}
+
+renderBans();
+</script>
+</body>
+</html>
