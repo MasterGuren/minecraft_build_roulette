@@ -50,32 +50,58 @@
   .main-panel { flex: 1; padding: 24px 24px; overflow-y: auto; }
   .main-panel h1 { text-align: center; font-size: 1.5rem; margin-bottom: 18px; }
   .filters { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-  .filters select, .filters input {
-    flex: 1; min-width: 120px; padding: 8px 12px; border-radius: 8px;
+  /* カスタムコンボボックス */
+  .combobox { position: relative; flex: 1; min-width: 150px; }
+  .combobox input {
+    width: 100%; padding: 8px 30px 8px 12px; border-radius: 8px;
     border: 1px solid #444; background: #16213e; color: #e0e0e0; font-size: 0.95rem;
   }
-  .filters select:focus, .filters input:focus { outline: none; border-color: #e94560; }
-  .filters input::placeholder { color: #666; }
-  .search-bar {
-    display: flex; gap: 10px; margin-bottom: 14px;
+  .combobox input:focus { outline: none; border-color: #e94560; }
+  .combobox input::placeholder { color: #666; }
+  .combobox .cb-arrow {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    color: #666; font-size: 0.7rem; pointer-events: none;
   }
-  .search-bar input {
-    flex: 1; padding: 8px 12px; border-radius: 8px;
-    border: 1px solid #444; background: #16213e; color: #e0e0e0; font-size: 0.95rem;
+  .combobox-dropdown {
+    display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 100;
+    max-height: 220px; overflow-y: auto; background: #16213e; border: 1px solid #555;
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   }
-  .search-bar input:focus { outline: none; border-color: #e94560; }
-  .search-bar input::placeholder { color: #666; }
-  .search-results { margin-top: 18px; }
-  .search-results .result { cursor: default; }
-  .tag-filter-info {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
-    padding: 8px 14px; background: #533483; border-radius: 8px; font-size: 0.9rem;
+  .combobox-dropdown.open { display: block; }
+  .combobox-dropdown div {
+    padding: 7px 12px; cursor: pointer; font-size: 0.88rem; border-bottom: 1px solid #222;
   }
-  .tag-filter-info button {
-    background: none; border: 1px solid #e0e0e0; color: #e0e0e0; padding: 3px 10px;
-    border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+  .combobox-dropdown div:last-child { border-bottom: none; }
+  .combobox-dropdown div:hover, .combobox-dropdown div.active { background: #0f3460; }
+
+  .search-input:focus { outline: none; border-color: #e94560; }
+  .search-input::placeholder { color: #666; }
+
+  /* アクティブフィルター（ピル） */
+  .active-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .filter-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 16px; font-size: 0.82rem; animation: fadeIn 0.15s;
   }
-  .tag-filter-info button:hover { background: rgba(255,255,255,0.1); }
+  .filter-pill.pill-scale { background: #2d6a4f; }
+  .filter-pill.pill-cat { background: #0f3460; }
+  .filter-pill.pill-mood { background: #1a5276; }
+  .filter-pill.pill-tag { background: #533483; }
+  .filter-pill button {
+    background: none; border: none; color: #ddd; cursor: pointer;
+    font-size: 0.95rem; padding: 0; line-height: 1;
+  }
+  .filter-pill button:hover { color: #ff6b81; }
+
+  /* グリッド表示（検索・フィルター結果） */
+  .search-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px; margin-top: 18px;
+  }
+  .search-grid .result { margin: 0; }
+  .search-grid .result h2 { font-size: 1rem; }
+  .search-grid .result .desc { font-size: 0.85rem; }
+  .search-grid-count { text-align: center; font-size: 0.85rem; color: #888; margin-top: 12px; }
   .hit-count { text-align: center; font-size: 0.85rem; color: #888; margin-bottom: 14px; }
   .spin-btn {
     display: block; width: 100%; padding: 14px; font-size: 1.1rem; border: none;
@@ -92,7 +118,8 @@
   }
   .result h2 { font-size: 1.15rem; margin-bottom: 8px; padding-right: 80px; }
   .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 0.85rem; color: #aaa; }
-  .meta span { background: #0f3460; padding: 3px 8px; border-radius: 6px; }
+  .meta span { background: #0f3460; padding: 3px 8px; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+  .meta span:hover { background: #1a5276; }
   .desc { line-height: 1.7; margin-bottom: 8px; font-size: 0.93rem; }
   .stars { font-size: 1rem; margin-bottom: 6px; }
   .tags { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -169,14 +196,14 @@
       <a href="ban.html" style="color:#e94560;font-size:0.85rem;text-decoration:none">&#128683; BANリスト</a>
     </div>
     <div class="filters">
-      <select id="scale"><option value="">規模: なんでも</option></select>
-      <input id="mood" list="moodList" placeholder="ムード: なんでも" autocomplete="off">
-      <datalist id="moodList"></datalist>
+      <div class="combobox" id="moodCombo">
+        <input id="moodInput" placeholder="ムード検索..." autocomplete="off">
+        <span class="cb-arrow">&#9660;</span>
+        <div class="combobox-dropdown" id="moodDropdown"></div>
+      </div>
+      <input id="searchBox" class="search-input" placeholder="検索（名前・説明・タグ）" autocomplete="off" style="flex:1;min-width:150px;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#16213e;color:#e0e0e0;font-size:0.95rem;">
     </div>
-    <div class="search-bar">
-      <input id="searchBox" placeholder="検索（名前・説明・タグ）" autocomplete="off">
-    </div>
-    <div id="tagFilterInfo"></div>
+    <div class="active-filters" id="activeFilters"></div>
     <div class="hit-count" id="hitCount"></div>
     <button class="spin-btn" id="spinBtn">&#127922; ランダムに3件提案</button>
     <div id="searchResults"></div>
@@ -196,14 +223,13 @@ const rows = CSV.trim().split("\n").slice(1).map(line => {
   return { name: m[1], category: m[2], scale: m[3], mood: m[4], difficulty: +m[5], description: m[6], tags: m[7] };
 }).filter(Boolean);
 
-const scaleOrder = ["超小", "小", "中", "大", "超大"];
-const scales = scaleOrder.filter(s => rows.some(r => r.scale === s));
 const moods = [...new Set(rows.map(r => r.mood))].sort();
-scales.forEach(s => document.getElementById("scale").innerHTML += `<option value="${s}">${s}</option>`);
-moods.forEach(m => document.getElementById("moodList").innerHTML += `<option value="${m}">`);
 
 let spinCount = 0;
 let activeTag = "";
+let activeCategory = "";
+let activeMood = "";
+let activeScale = "";
 const history = [];
 let currentBuilds = [];
 
@@ -348,18 +374,69 @@ function getBans() {
   try { return new Set(JSON.parse(localStorage.getItem("mcBans") || "[]").map(b => b.name)); } catch { return new Set(); }
 }
 
+// --- Mood Combobox ---
+const moodInput = document.getElementById("moodInput");
+const moodDropdown = document.getElementById("moodDropdown");
+let moodOpen = false;
+
+function renderMoodDropdown(filter) {
+  const f = (filter || "").toLowerCase();
+  const list = f ? moods.filter(m => m.toLowerCase().includes(f)) : moods;
+  if (list.length === 0) {
+    moodDropdown.innerHTML = '<div style="color:#666;pointer-events:none">該当なし</div>';
+  } else {
+    moodDropdown.innerHTML = list.map(m =>
+      `<div onclick="selectMood('${m}')"${m === activeMood ? ' class="active"' : ''}>${m}</div>`
+    ).join("");
+  }
+}
+function openMoodDropdown() {
+  renderMoodDropdown(moodInput.value);
+  moodDropdown.classList.add("open");
+  moodOpen = true;
+}
+function closeMoodDropdown() {
+  moodDropdown.classList.remove("open");
+  moodOpen = false;
+}
+function selectMood(m) {
+  activeMood = m;
+  moodInput.value = m;
+  closeMoodDropdown();
+  onFilterChange();
+}
+moodInput.addEventListener("focus", openMoodDropdown);
+moodInput.addEventListener("input", () => {
+  const v = moodInput.value.trim();
+  if (!v) { activeMood = ""; }
+  else if (moods.includes(v)) { activeMood = v; }
+  else { activeMood = ""; }
+  openMoodDropdown();
+  onFilterChange();
+});
+moodInput.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { moodInput.blur(); closeMoodDropdown(); }
+});
+document.addEventListener("click", (e) => {
+  if (!document.getElementById("moodCombo").contains(e.target)) closeMoodDropdown();
+});
+
 // --- Filters ---
+function hasActiveFilters() {
+  return activeCategory || activeMood || activeTag ||
+    document.getElementById("scale").value ||
+    document.getElementById("searchBox").value.trim();
+}
 function getFiltered() {
-  const s = document.getElementById("scale").value;
-  const m = document.getElementById("mood").value.trim();
   const q = document.getElementById("searchBox").value.trim().toLowerCase();
   const bans = getBans();
   return rows.filter(r => {
-    if (s && r.scale !== s) return false;
-    if (m && r.mood !== m) return false;
+    if (activeScale && r.scale !== activeScale) return false;
+    if (activeCategory && r.category !== activeCategory) return false;
+    if (activeMood && r.mood !== activeMood) return false;
     if (bans.has(r.name)) return false;
     if (activeTag && !r.tags.split("|").some(t => t.trim() === activeTag)) return false;
-    if (q && !(r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q) || r.tags.toLowerCase().includes(q))) return false;
+    if (q && !(r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q) || r.tags.toLowerCase().includes(q) || r.category.toLowerCase().includes(q))) return false;
     return true;
   });
 }
@@ -367,44 +444,65 @@ function updateCount() {
   document.getElementById("hitCount").textContent =
     `${getFiltered().length}件 ヒット（全${rows.length}件）`;
 }
-function renderTagFilter() {
-  const el = document.getElementById("tagFilterInfo");
-  if (!activeTag) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div class="tag-filter-info">タグ「${activeTag}」で絞り込み中 <button onclick="clearTagFilter()">解除</button></div>`;
+function renderActiveFilters() {
+  const el = document.getElementById("activeFilters");
+  let html = "";
+  if (activeScale) html += `<span class="filter-pill pill-scale">${activeScale} <button onclick="clearFilter('scale')">&times;</button></span>`;
+  if (activeCategory) html += `<span class="filter-pill pill-cat">${activeCategory} <button onclick="clearFilter('category')">&times;</button></span>`;
+  if (activeMood) html += `<span class="filter-pill pill-mood">${activeMood} <button onclick="clearFilter('mood')">&times;</button></span>`;
+  if (activeTag) html += `<span class="filter-pill pill-tag">#${activeTag} <button onclick="clearFilter('tag')">&times;</button></span>`;
+  el.innerHTML = html;
+}
+function filterByScale(s) {
+  activeScale = (activeScale === s) ? "" : s;
+  onFilterChange();
+}
+function filterByCategory(cat) {
+  activeCategory = (activeCategory === cat) ? "" : cat;
+  onFilterChange();
+}
+function filterByMood(mood) {
+  activeMood = (activeMood === mood) ? "" : mood;
+  moodInput.value = activeMood;
+  onFilterChange();
 }
 function filterByTag(tag) {
-  activeTag = tag;
-  renderTagFilter();
-  updateCount();
-  doSearch();
+  activeTag = (activeTag === tag) ? "" : tag;
+  onFilterChange();
 }
-function clearTagFilter() {
-  activeTag = "";
-  renderTagFilter();
+function clearFilter(type) {
+  if (type === "scale") activeScale = "";
+  if (type === "category") activeCategory = "";
+  if (type === "mood") { activeMood = ""; moodInput.value = ""; }
+  if (type === "tag") activeTag = "";
+  onFilterChange();
+}
+function onFilterChange() {
+  renderActiveFilters();
   updateCount();
   doSearch();
 }
 function doSearch() {
   const q = document.getElementById("searchBox").value.trim().toLowerCase();
-  if (!q && !activeTag) {
+  const filtering = q || activeTag || activeCategory || activeMood || activeScale;
+  if (!filtering) {
     document.getElementById("searchResults").innerHTML = "";
     return;
   }
+  // グリッド表示時はランダム結果をクリア
+  document.getElementById("result").innerHTML = "";
   const filtered = getFiltered();
   if (filtered.length === 0) {
     document.getElementById("searchResults").innerHTML = '<div class="empty">該当なし</div>';
     return;
   }
-  const show = filtered.slice(0, 20);
+  const show = filtered.slice(0, 30);
   currentBuilds = show;
   document.getElementById("searchResults").innerHTML =
-    '<div class="results">' + show.map((b, i) => renderCard(b, i)).join("") +
-    (filtered.length > 20 ? `<div class="count">他 ${filtered.length - 20}件</div>` : "") +
-    '</div>';
+    '<div class="search-grid">' + show.map((b, i) => renderCard(b, i)).join("") + '</div>' +
+    (filtered.length > 30 ? `<div class="search-grid-count">他 ${filtered.length - 30}件</div>` : `<div class="search-grid-count">${filtered.length}件</div>`);
 }
-document.getElementById("scale").addEventListener("change", () => { updateCount(); doSearch(); });
-document.getElementById("mood").addEventListener("input", () => { updateCount(); doSearch(); });
-document.getElementById("searchBox").addEventListener("input", () => { updateCount(); doSearch(); });
+document.getElementById("searchBox").addEventListener("input", onFilterChange);
 updateCount();
 
 // --- Spin ---
@@ -451,9 +549,9 @@ function renderCard(b, idx) {
       <h2>${b.name}</h2>
       <div class="desc">${b.description}</div>
       <div class="meta">
-        <span>${b.category}</span>
-        <span>${b.scale}</span>
-        <span>${b.mood}</span>
+        <span onclick="filterByCategory('${b.category}')" title="クリックで絞り込み">${b.category}</span>
+        <span onclick="filterByScale('${b.scale}')" title="クリックで絞り込み">${b.scale}</span>
+        <span onclick="filterByMood('${b.mood}')" title="クリックで絞り込み">${b.mood}</span>
       </div>
       <div class="stars">難易度: ${stars}</div>
       <div class="tags">${tagHtml}</div>
@@ -467,6 +565,9 @@ document.getElementById("spinBtn").addEventListener("click", function() {
       '<div class="warning">その条件の建築はまだ収録されていません。条件を変えてみてね。</div>';
     return;
   }
+
+  // グリッド表示をクリア
+  document.getElementById("searchResults").innerHTML = "";
 
   const picks = pickN(filtered, Math.min(3, filtered.length));
   currentBuilds = picks;
