@@ -50,11 +50,32 @@
   .main-panel { flex: 1; padding: 24px 24px; overflow-y: auto; }
   .main-panel h1 { text-align: center; font-size: 1.5rem; margin-bottom: 18px; }
   .filters { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-  .filters select {
+  .filters select, .filters input {
     flex: 1; min-width: 120px; padding: 8px 12px; border-radius: 8px;
     border: 1px solid #444; background: #16213e; color: #e0e0e0; font-size: 0.95rem;
   }
-  .filters select:focus { outline: none; border-color: #e94560; }
+  .filters select:focus, .filters input:focus { outline: none; border-color: #e94560; }
+  .filters input::placeholder { color: #666; }
+  .search-bar {
+    display: flex; gap: 10px; margin-bottom: 14px;
+  }
+  .search-bar input {
+    flex: 1; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid #444; background: #16213e; color: #e0e0e0; font-size: 0.95rem;
+  }
+  .search-bar input:focus { outline: none; border-color: #e94560; }
+  .search-bar input::placeholder { color: #666; }
+  .search-results { margin-top: 18px; }
+  .search-results .result { cursor: default; }
+  .tag-filter-info {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    padding: 8px 14px; background: #533483; border-radius: 8px; font-size: 0.9rem;
+  }
+  .tag-filter-info button {
+    background: none; border: 1px solid #e0e0e0; color: #e0e0e0; padding: 3px 10px;
+    border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+  }
+  .tag-filter-info button:hover { background: rgba(255,255,255,0.1); }
   .hit-count { text-align: center; font-size: 0.85rem; color: #888; margin-bottom: 14px; }
   .spin-btn {
     display: block; width: 100%; padding: 14px; font-size: 1.1rem; border: none;
@@ -75,7 +96,8 @@
   .desc { line-height: 1.7; margin-bottom: 8px; font-size: 0.93rem; }
   .stars { font-size: 1rem; margin-bottom: 6px; }
   .tags { display: flex; gap: 5px; flex-wrap: wrap; }
-  .tags span { background: #533483; padding: 2px 8px; border-radius: 12px; font-size: 0.78rem; }
+  .tags span { background: #533483; padding: 2px 8px; border-radius: 12px; font-size: 0.78rem; cursor: pointer; transition: background 0.2s; }
+  .tags span:hover { background: #7b52ab; }
 
   .card-actions {
     position: absolute; top: 14px; right: 14px; display: flex; gap: 6px;
@@ -148,10 +170,16 @@
     </div>
     <div class="filters">
       <select id="scale"><option value="">規模: なんでも</option></select>
-      <select id="mood"><option value="">ムード: なんでも</option></select>
+      <input id="mood" list="moodList" placeholder="ムード: なんでも" autocomplete="off">
+      <datalist id="moodList"></datalist>
     </div>
+    <div class="search-bar">
+      <input id="searchBox" placeholder="検索（名前・説明・タグ）" autocomplete="off">
+    </div>
+    <div id="tagFilterInfo"></div>
     <div class="hit-count" id="hitCount"></div>
     <button class="spin-btn" id="spinBtn">&#127922; ランダムに3件提案</button>
+    <div id="searchResults"></div>
     <div id="result"></div>
     <div class="history" id="historySection" style="display:none">
       <h3>さっき出たやつ</h3>
@@ -168,12 +196,14 @@ const rows = CSV.trim().split("\n").slice(1).map(line => {
   return { name: m[1], category: m[2], scale: m[3], mood: m[4], difficulty: +m[5], description: m[6], tags: m[7] };
 }).filter(Boolean);
 
-const scales = [...new Set(rows.map(r => r.scale))].sort();
+const scaleOrder = ["超小", "小", "中", "大", "超大"];
+const scales = scaleOrder.filter(s => rows.some(r => r.scale === s));
 const moods = [...new Set(rows.map(r => r.mood))].sort();
 scales.forEach(s => document.getElementById("scale").innerHTML += `<option value="${s}">${s}</option>`);
-moods.forEach(m => document.getElementById("mood").innerHTML += `<option value="${m}">${m}</option>`);
+moods.forEach(m => document.getElementById("moodList").innerHTML += `<option value="${m}">`);
 
 let spinCount = 0;
+let activeTag = "";
 const history = [];
 let currentBuilds = [];
 
@@ -321,16 +351,60 @@ function getBans() {
 // --- Filters ---
 function getFiltered() {
   const s = document.getElementById("scale").value;
-  const m = document.getElementById("mood").value;
+  const m = document.getElementById("mood").value.trim();
+  const q = document.getElementById("searchBox").value.trim().toLowerCase();
   const bans = getBans();
-  return rows.filter(r => (!s || r.scale === s) && (!m || r.mood === m) && !bans.has(r.name));
+  return rows.filter(r => {
+    if (s && r.scale !== s) return false;
+    if (m && r.mood !== m) return false;
+    if (bans.has(r.name)) return false;
+    if (activeTag && !r.tags.split("|").some(t => t.trim() === activeTag)) return false;
+    if (q && !(r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q) || r.tags.toLowerCase().includes(q))) return false;
+    return true;
+  });
 }
 function updateCount() {
   document.getElementById("hitCount").textContent =
     `${getFiltered().length}件 ヒット（全${rows.length}件）`;
 }
-document.getElementById("scale").addEventListener("change", updateCount);
-document.getElementById("mood").addEventListener("change", updateCount);
+function renderTagFilter() {
+  const el = document.getElementById("tagFilterInfo");
+  if (!activeTag) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="tag-filter-info">タグ「${activeTag}」で絞り込み中 <button onclick="clearTagFilter()">解除</button></div>`;
+}
+function filterByTag(tag) {
+  activeTag = tag;
+  renderTagFilter();
+  updateCount();
+  doSearch();
+}
+function clearTagFilter() {
+  activeTag = "";
+  renderTagFilter();
+  updateCount();
+  doSearch();
+}
+function doSearch() {
+  const q = document.getElementById("searchBox").value.trim().toLowerCase();
+  if (!q && !activeTag) {
+    document.getElementById("searchResults").innerHTML = "";
+    return;
+  }
+  const filtered = getFiltered();
+  if (filtered.length === 0) {
+    document.getElementById("searchResults").innerHTML = '<div class="empty">該当なし</div>';
+    return;
+  }
+  const show = filtered.slice(0, 20);
+  currentBuilds = show;
+  document.getElementById("searchResults").innerHTML =
+    '<div class="results">' + show.map((b, i) => renderCard(b, i)).join("") +
+    (filtered.length > 20 ? `<div class="count">他 ${filtered.length - 20}件</div>` : "") +
+    '</div>';
+}
+document.getElementById("scale").addEventListener("change", () => { updateCount(); doSearch(); });
+document.getElementById("mood").addEventListener("input", () => { updateCount(); doSearch(); });
+document.getElementById("searchBox").addEventListener("input", () => { updateCount(); doSearch(); });
 updateCount();
 
 // --- Spin ---
@@ -360,7 +434,7 @@ function banFromCard(idx) {
 
 function renderCard(b, idx) {
   const stars = "\u2605".repeat(b.difficulty) + "\u2606".repeat(5 - b.difficulty);
-  const tagHtml = b.tags.split("|").filter(t => t.trim()).map(t => `<span>${t.trim()}</span>`).join("");
+  const tagHtml = b.tags.split("|").filter(t => t.trim()).map(t => `<span onclick="filterByTag('${t.trim()}')">${t.trim()}</span>`).join("");
   const inQ = isInQueue(b.name);
   const btnLabel = inQ ? "追加済" : "+ キュー";
   const btnClass = inQ ? "queue-btn in-queue" : "queue-btn";
