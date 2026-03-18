@@ -26,11 +26,19 @@
   .queue-list li .q-info { flex: 1; }
   .queue-list li .q-name { font-weight: bold; margin-bottom: 2px; }
   .queue-list li .q-meta { font-size: 0.75rem; color: #888; }
+  .queue-list li .q-desc { font-size: 0.72rem; color: #aaa; margin-top: 3px; line-height: 1.5; }
+  .queue-list li .q-actions { flex-shrink: 0; margin-left: 6px; display: flex; flex-direction: column; gap: 4px; }
   .queue-list li .q-remove {
     background: none; border: none; color: #e94560; cursor: pointer;
-    font-size: 0.9rem; padding: 0 4px; margin-left: 6px; flex-shrink: 0;
+    font-size: 0.9rem; padding: 0 4px; flex-shrink: 0;
   }
   .queue-list li .q-remove:hover { color: #ff6b81; }
+  .queue-list li .q-built {
+    background: none; border: 1px solid #4caf50; color: #4caf50; cursor: pointer;
+    font-size: 0.68rem; font-weight: bold; padding: 2px 6px; border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .queue-list li .q-built:hover { background: #4caf50; color: #fff; }
   .queue-actions { margin-top: 10px; display: flex; gap: 6px; }
   .queue-actions button {
     flex: 1; font-size: 0.78rem; color: #888; background: none; border: 1px solid #444;
@@ -86,6 +94,13 @@
     transition: all 0.2s;
   }
   .ban-btn:hover { background: #e94560; color: #fff; }
+  .built-btn {
+    background: none; border: 1px solid #4caf50; color: #4caf50; cursor: pointer;
+    font-size: 0.8rem; font-weight: bold; padding: 4px 10px; border-radius: 6px;
+    transition: all 0.2s;
+  }
+  .built-btn:hover { background: #4caf50; color: #fff; }
+  .built-btn.is-built { background: #4caf50; color: #fff; }
 
   .count { text-align: right; font-size: 0.8rem; color: #666; margin-top: 6px; }
   .empty { text-align: center; color: #888; margin-top: 20px; padding: 20px; }
@@ -128,6 +143,7 @@
   <div class="main-panel">
     <h1>&#9935;&#65039; マイクラ建築ルーレット</h1>
     <div style="text-align:right;margin-bottom:10px">
+      <a href="built.html" style="color:#4caf50;font-size:0.85rem;text-decoration:none;margin-right:14px">&#9989; 作成済みリスト</a>
       <a href="ban.html" style="color:#e94560;font-size:0.85rem;text-decoration:none">&#128683; BANリスト</a>
     </div>
     <div class="filters">
@@ -172,7 +188,7 @@ function addToQueue(idx) {
   const b = currentBuilds[idx];
   if (!b || isInQueue(b.name)) return;
   const q = getQueue();
-  q.push({ name: b.name, category: b.category, scale: b.scale, mood: b.mood, difficulty: b.difficulty });
+  q.push({ name: b.name, category: b.category, scale: b.scale, mood: b.mood, difficulty: b.difficulty, description: b.description });
   saveQueue(q);
   renderQueue();
   updateQueueButtons();
@@ -208,12 +224,17 @@ function renderQueue() {
   actions.style.display = "";
   list.innerHTML = q.map((f, i) => {
     const stars = "\u2605".repeat(f.difficulty) + "\u2606".repeat(5 - f.difficulty);
+    const desc = f.description || "";
     return `<li>
       <div class="q-info">
         <div class="q-name">${f.name}</div>
+        <div class="q-desc">${desc}</div>
         <div class="q-meta">${f.scale} / ${f.mood} / ${stars}</div>
       </div>
-      <button class="q-remove" onclick="removeFromQueue(${i})">\u2715</button>
+      <div class="q-actions">
+        <button class="q-built" onclick="markBuiltFromQueue(${i})">作った!</button>
+        <button class="q-remove" onclick="removeFromQueue(${i})">\u2715</button>
+      </div>
     </li>`;
   }).join("");
 }
@@ -239,6 +260,56 @@ function exportQueue() {
     const btns = document.querySelectorAll(".queue-actions button");
     btns[0].textContent = "OK!";
     setTimeout(() => { btns[0].textContent = "コピー"; }, 1200);
+  });
+}
+
+// --- Built ---
+function getBuilt() {
+  try { return JSON.parse(localStorage.getItem("mcBuilt") || "[]"); } catch { return []; }
+}
+function saveBuilt(b) { localStorage.setItem("mcBuilt", JSON.stringify(b)); }
+function isBuilt(name) { return getBuilt().some(b => b.name === name); }
+
+function markBuilt(idx) {
+  const b = currentBuilds[idx];
+  if (!b || isBuilt(b.name)) return;
+  const built = getBuilt();
+  const today = new Date().toISOString().slice(0, 10);
+  built.push({ name: b.name, category: b.category, scale: b.scale, mood: b.mood, difficulty: b.difficulty, date: today });
+  saveBuilt(built);
+  updateBuiltButtons();
+}
+
+function markBuiltFromQueue(idx) {
+  const q = getQueue();
+  const f = q[idx];
+  if (!f) return;
+  // 作成済みに追加（未登録の場合のみ）
+  if (!isBuilt(f.name)) {
+    const built = getBuilt();
+    const today = new Date().toISOString().slice(0, 10);
+    built.push({ name: f.name, category: f.category, scale: f.scale, mood: f.mood, difficulty: f.difficulty, date: today });
+    saveBuilt(built);
+  }
+  // キューから削除
+  q.splice(idx, 1);
+  saveQueue(q);
+  renderQueue();
+  updateQueueButtons();
+  updateBuiltButtons();
+}
+
+function updateBuiltButtons() {
+  document.querySelectorAll(".built-btn").forEach(btn => {
+    const idx = +btn.dataset.idx;
+    const b = currentBuilds[idx];
+    if (b && isBuilt(b.name)) {
+      btn.textContent = "作成済み";
+      btn.classList.add("is-built");
+    } else {
+      btn.textContent = "作った！";
+      btn.classList.remove("is-built");
+    }
   });
 }
 
@@ -293,19 +364,23 @@ function renderCard(b, idx) {
   const inQ = isInQueue(b.name);
   const btnLabel = inQ ? "追加済" : "+ キュー";
   const btnClass = inQ ? "queue-btn in-queue" : "queue-btn";
+  const builtNow = isBuilt(b.name);
+  const builtLabel = builtNow ? "作成済み" : "作った！";
+  const builtClass = builtNow ? "built-btn is-built" : "built-btn";
   return `
     <div class="result">
       <div class="card-actions">
         <button class="${btnClass}" data-idx="${idx}" onclick="addToQueue(${idx})">${btnLabel}</button>
+        <button class="${builtClass}" data-idx="${idx}" onclick="markBuilt(${idx})">${builtLabel}</button>
         <button class="ban-btn" onclick="banFromCard(${idx})">BAN</button>
       </div>
       <h2>${b.name}</h2>
+      <div class="desc">${b.description}</div>
       <div class="meta">
         <span>${b.category}</span>
         <span>${b.scale}</span>
         <span>${b.mood}</span>
       </div>
-      <div class="desc">${b.description}</div>
       <div class="stars">難易度: ${stars}</div>
       <div class="tags">${tagHtml}</div>
     </div>`;
